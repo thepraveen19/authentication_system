@@ -3,6 +3,7 @@ __pycache__/
 .vscode/
 .env
 .venv/
+*.ini
 *.pyc
 *.pyo
 *.pyd
