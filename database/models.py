@@ -1,7 +1,9 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Text
 from sqlalchemy.orm import declarative_base, relationship
-from session import engine
+import os
+import sys
+from database.session import engine
 
 Base = declarative_base()
 
@@ -34,10 +36,22 @@ class User(Base):
     email_verified = Column(Boolean, default=False)
     phone_verified = Column(Boolean, default=False)
     password_reset_token = Column(String, nullable=True)
-
     role = relationship("Role", back_populates="users")
 
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
 
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    token = Column(String, unique=True, index=True)
+    expiration_time = Column(DateTime, nullable=False)
+    issued = Column(DateTime, default=datetime.utcnow)  # New field to store the issuance time
+    is_used = Column(Boolean, default=False)
+    used_at = Column(DateTime, nullable=True)
+
+# Add a relationship between the tables
+User.reset_tokens = relationship("PasswordResetToken", back_populates="user")
+PasswordResetToken.user = relationship("User", back_populates="reset_tokens")
 Role.users = relationship("User", back_populates="role")
 
 # Create the tables
