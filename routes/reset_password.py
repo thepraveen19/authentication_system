@@ -1,11 +1,9 @@
-# routes/authentication.py
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import session, models
-from pydantic import BaseModel, EmailStr  # Import EmailStr
+from database import session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
@@ -13,6 +11,8 @@ from services.auth_service import send_password_reset_email
 from database.models import PasswordResetToken, User
 from config.config import SECRET_KEY, ALGORITHM
 from configparser import ConfigParser
+from database.database import get_db
+from routes.schemas import PasswordResetRequest
 
 EMAIL_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "email.ini")
 config = ConfigParser()
@@ -21,81 +21,6 @@ domain = config["Credentials"]["domain"]
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# Dependency to get the database session
-def get_db():
-    db = session.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-# Updated Pydantic model for user registration data
-class UserRegistration(BaseModel):
-    email: EmailStr  # Use EmailStr instead of str for email
-    password: str
-    phone_number: str
-
-
-@router.post("/register", response_model=dict)
-def register_user(user_data: UserRegistration, db: Session = Depends(get_db)):
-    # Check if the email is already registered
-    if db.query(models.User).filter(models.User.email == user_data.email).first():
-        raise HTTPException(status_code=400, detail="Email is already registered")
-
-    # Hash the password (use a suitable hashing library like bcrypt)
-    hashed_password = pwd_context.hash(user_data.password)
-
-    # Create a new user in the database
-    new_user = models.User(
-        email=user_data.email,
-        hashed_password=hashed_password,
-        phone_number=user_data.phone_number,
-        role_id=1
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return {"message": "User registered successfully"}
-
-
-# Login code starts here
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-# Function to create a JWT token
-def create_jwt_token(user_id: int, expires_delta: timedelta):
-    to_encode = {"sub": str(user_id), "exp": datetime.utcnow() + expires_delta}
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-@router.post("/login", response_model=dict)
-def login_user(user_data: UserLogin, db: Session = Depends(get_db)):
-    try:
-        # Check if the user exists
-        user = db.query(models.User).filter(models.User.email == user_data.email).first()
-        if not user or not verify_password(user_data.password, user.hashed_password):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-
-        # Generate JWT token
-        access_token_expires = timedelta(minutes=30)
-        access_token = create_jwt_token(user_id=user.user_id, expires_delta=access_token_expires)
-
-        return {"access_token": access_token, "token_type": "bearer"}
-    except Exception as e:
-        print(f"Login error: {e}")
-        raise
-
-# Password reset model
-
-# Define a Pydantic model for the request data
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
 
 # Define a function to generate a secure token for password reset
 def generate_password_reset_token(email: str):
@@ -207,8 +132,8 @@ def invalidate_reset_token(token_id: str):
 
     db.close()
 
-
-@router.post("/reset-password", response_model=dict)
+@router.get("/reset-password", response_model=dict)
+# @router.post("/reset-password", response_model=dict)
 def reset_password(token: str, new_password: str, db: Session = Depends(get_db)):
     # Verify the token (you need to implement this logic)
     user = verify_password_reset_token(token)
