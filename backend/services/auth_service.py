@@ -12,15 +12,20 @@ EMAIL_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath
 config = ConfigParser()
 config.read(EMAIL_CONFIG_PATH)
 
-def create_reset_email(receiver_email: str, reset_link: str) -> MIMEMultipart:
+def create_reset_email(receiver_email: str, reset_key: str) -> MIMEMultipart:
     # Create a MIME message
     message = MIMEMultipart()
     message["From"] = config["Credentials"]["sender_email"]
     message["To"] = receiver_email
     message["Subject"] = "Password Reset Request"
 
-    # Add the reset link to the email body
-    body = f"Click the following link to reset your password: {reset_link}"
+    # Add cautionary message and key validity period to the email body
+    body = (
+        "IMPORTANT: Do not share this password reset key with anyone. "
+        "Keep it confidential and secure.\n\n"
+        f"The password reset key is valid for 1 hour.\n\n"
+        f"Your password reset key is: {reset_key}"
+    )
     message.attach(MIMEText(body, "plain"))
 
     return message

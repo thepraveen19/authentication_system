@@ -1,40 +1,18 @@
-# services/auth_service.py
+import streamlit as st
 
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from configparser import ConfigParser
-import os, sys
+# Main Streamlit app
+def main():
+    # Get token from URL parameters
+    query_params = st.query_params
+    token = query_params.get("token", "")
 
-# Load configuration from the INI file
-# Directly access the path to the database configuration file
-EMAIL_CONFIG_PATH = '/home/xbot/Eq_Algo_Project/Authentication_system_repo/config/email.ini'
-config = ConfigParser()
-config.read(EMAIL_CONFIG_PATH)
+    # Check if token exists
+    if token:
+        # Redirect to frontend URL with the token
+        frontend_url = "http://0.0.0.0:8501/reset-password?token=" + token
+        st.markdown(f"Redirecting to frontend... [Click here to redirect]({frontend_url})")
+    else:
+        st.error("No token provided.")
 
-def create_yellow_email(receiver_email: str) -> MIMEMultipart:
-    # Create a MIME message
-    message = MIMEMultipart()
-    message["From"] = config["Credentials"]["sender_email"]
-    message["To"] = receiver_email
-    message["Subject"] = "Test Email"
-
-    # Add yellow text to the email body
-    body = '<html><body style="background-color: yellow;"><p>Hello, this is a test email with yellow text!</p></body></html>'
-    message.attach(MIMEText(body, "html"))
-
-    return message
-
-def send_email(receiver_email: str):
-    # Create a MIME message with yellow text
-    email_message = create_yellow_email(receiver_email)
-
-    # Connect to the SMTP server and send the email
-    with smtplib.SMTP(config["SMTP"]["server"], int(config["SMTP"]["port"])) as server:
-        # Connect to the SMTP server and send the email
-        with server:
-            server.starttls()
-            server.login(config["Credentials"]["sender_email"], config["Credentials"]["password"])
-            server.sendmail(config["Credentials"]["sender_email"], receiver_email, email_message.as_string())
-
-send_email('thepraveen19@gmail.com')
+if __name__ == "__main__":
+    main()

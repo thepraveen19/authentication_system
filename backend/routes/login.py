@@ -45,3 +45,4 @@ def login_user(user_data: UserLogin, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Login error: {e}")
         raise
+

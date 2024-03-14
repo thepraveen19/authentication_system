@@ -12,3 +12,6 @@ class UserLogin(BaseModel):
 # Define a Pydantic model for the request data
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+ 
+
+

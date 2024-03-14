@@ -4,149 +4,147 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import session
-from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from services.auth_service import send_password_reset_email
-from database.models import PasswordResetToken, User
-from config.config import SECRET_KEY, ALGORITHM
-from configparser import ConfigParser
+from database.models import PasswordResetToken, User, PasswordResetKey
 from database.database import get_db
 from routes.schemas import PasswordResetRequest
+import secrets, string
 
-EMAIL_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "email.ini")
-config = ConfigParser()
-config.read(EMAIL_CONFIG_PATH)
-domain = config["Credentials"]["domain"]
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Define a function to generate a secure token for password reset
-def generate_password_reset_token(email: str):
-    # Define the payload for the JWT token
-    token_payload = {
-        "sub": email,
-        "exp": datetime.utcnow() + timedelta(hours=1),  # Token expiration time (e.g., 1 hour)
-        "iat": datetime.utcnow(),  # Token issue time
-        "type": "password-reset",  # Custom type to identify the purpose of the token
-    }
+def generate_password_reset_token(email: str, user_id: int, db: Session) -> PasswordResetToken:
+    # Construct a UTC datetime from time.time()
+    utc_now = datetime.utcnow()
 
-    # Encode the token using the provided secret key and algorithm
-    token = jwt.encode(token_payload, SECRET_KEY, algorithm=ALGORITHM)
-    return token
+    # Calculate expiration time (e.g., 1 hour from now)
+    expiration_time = utc_now + timedelta(hours=1)
+
+    # Generate a unique random token
+    token_characters = string.ascii_letters + string.digits
+    reset_token = ''.join(secrets.choice(token_characters) for i in range(32))  # Generate a 32-character token
+
+    # Create a new PasswordResetToken object with the user_id provided
+    reset_token_obj = PasswordResetToken(
+        user_id=user_id,
+        token=reset_token,
+        expiration_time=expiration_time,
+        issued=utc_now,
+        is_used=False,
+        used_at=None
+    )
+
+    # Commit the token to the database
+    db.add(reset_token_obj)
+    db.commit()
+
+    return reset_token_obj
+
 
 def store_reset_token(email: str, reset_token: str, expiration_minutes: int = 60):
-    # Fetch the user from the database based on the provided email
     db = session.SessionLocal()
     user = db.query(User).filter(User.email == email).first()
-    
     if not user:
-        # Handle the case where the user is not found
         db.close()
-        raise Exception("User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     expiration_time = datetime.utcnow() + timedelta(minutes=expiration_minutes)
-    
-    # Create a new PasswordResetToken record
-    db_token = PasswordResetToken(user_id=user.user_id, token=reset_token, expiration_time=expiration_time)
+    db_token = PasswordResetToken(user_id=user.id, token=reset_token, expiration_time=expiration_time)
     db.add(db_token)
     db.commit()
     db.refresh(db_token)
     db.close()
-
     return db_token
+
+
+def generate_unique_key(length: int = 6) -> str:
+    return secrets.token_urlsafe(length)
+
+
+def associate_key_with_token(db: Session, reset_key: str, reset_token_id: int, user_id: int):
+    db_key = PasswordResetKey(key=reset_key, reset_token_id=reset_token_id, user_id=user_id)
+    db.add(db_key)
+    db.commit()
+    db.refresh(db_key)
+    return db_key
+
+
 
 @router.post("/forgot-password", response_model=dict)
 def forgot_password(request_data: PasswordResetRequest, db: Session = Depends(get_db)):
-    # Extract email from the request data
     email = request_data.email
-
-    # Check if the user exists
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate a secure token for password reset
-    reset_token = generate_password_reset_token(email)
+    reset_token = generate_password_reset_token(email, user.user_id, db)  # Change user.id to user.user_id
+    print(reset_token.id)
 
-    reset_link = f"https://{domain}/reset-password?token={reset_token}"
+    reset_key = generate_unique_key()
+    print(reset_key)
+    
+    associate_key_with_token(db, reset_key, reset_token.id,user.user_id )
 
-    # Implemented logic to securely store the reset_token temporarily (e.g., in the database)
-    store_reset_token(email=email, reset_token=reset_token)
+    reset_link = f"{reset_key}"
 
-    # Send a password reset email using the auth_service
     send_password_reset_email(email, reset_link)
 
-    # Return a message indicating that instructions have been sent
     return {"message": "Password reset instructions sent to the provided email"}
 
-# rest password
-def verify_password_reset_token(token: str) -> User:
-    try:
-        # Decode the token using the secret key and algorithm
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+def verify_password_reset_key(key: str, db: Session):
+    reset_key = db.query(PasswordResetKey).filter(PasswordResetKey.key == key).first()
+    if not reset_key:
+        return None, None
+    
+    reset_token_id = reset_key.reset_token_id
+    reset_token = db.query(PasswordResetToken).filter(PasswordResetToken.id == reset_token_id).first()
+    
+    if not reset_token or reset_token.is_used or reset_token.expiration_time < datetime.utcnow():
+        return None, None
+    
+    return reset_token, reset_key.user_id
 
-        # Extract the email from the payload
-        email = payload.get("sub")
-
-        # Retrieve the user from the database based on the email
-        db = session.SessionLocal()
-        user = db.query(User).filter(User.email == email).first()
-
-        # Retrieve the corresponding password reset token
-        reset_token = (
-            db.query(PasswordResetToken)
-            .filter(
-                PasswordResetToken.user_id == user.user_id,
-                PasswordResetToken.token == token,
-                PasswordResetToken.is_used == False,  # Check if the token is not marked as used
-                PasswordResetToken.expiration_time >= datetime.utcnow(),  # Check if the token is not expired
-            )
-            .first()
-        )
-
-        db.close()
-
-        if reset_token:
-            return user
-
-    except JWTError:
-        # Handle JWT errors, for example, token expired or invalid signature
-        pass
-
-    return None
-
-
-def invalidate_reset_token(token_id: str):
-    # Retrieve the token from the database based on the token_id (assuming it's a JWT token)
-    db = session.SessionLocal()
-    token = db.query(PasswordResetToken).filter(PasswordResetToken.token == token_id).first()
-
-    # Check if the token exists
-    if token:
-        # Mark the token as used or invalid (update the database)
-        token.is_used = True
-        token.used_at = datetime.utcnow()  # Record the timestamp when the token was used
+def invalidate_reset_key(key: str, db: Session):
+    reset_key = db.query(PasswordResetKey).filter(PasswordResetKey.key == key).first()
+    if reset_key:
+        db.delete(reset_key)
         db.commit()
 
-    db.close()
+@router.post("/reset-password", response_model=dict)
+def reset_password(key: str, new_password: str, db: Session = Depends(get_db)):
+    # Verify the password reset key and retrieve the associated reset token
+    reset_token, user_id = verify_password_reset_key(key, db)
 
-@router.get("/reset-password", response_model=dict)
-# @router.post("/reset-password", response_model=dict)
-def reset_password(token: str, new_password: str, db: Session = Depends(get_db)):
-    # Verify the token (you need to implement this logic)
-    user = verify_password_reset_token(token)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired key")
 
+    # Retrieve the associated reset key object
+    reset_key = db.query(PasswordResetKey).filter(PasswordResetKey.key == key).first()
+
+    if not reset_key:
+        raise HTTPException(status_code=404, detail="Reset key not found")
+
+    user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # Update the user's password
+    # Hash the new password
     hashed_password = pwd_context.hash(new_password)
+
+    # Update the user's password in the database
     user.hashed_password = hashed_password
+  
+    # Invalidate the password reset key
+    invalidate_reset_key(key, db)
+    reset_token.is_used = True
+    reset_token.used_at = datetime.utcnow()
     db.commit()
 
-    # Optionally, invalidate or delete the used token from the temporary storage
-    invalidate_reset_token(token)
-
     return {"message": "Password reset successfully"}
+
+
+
+

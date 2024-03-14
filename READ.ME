@@ -1,5 +1,5 @@
-/authentication-frontend
-|-- src
+/Authentication_system
+|-- frontend
 |   |-- components
 |   |   |-- common
 |   |   |   |-- __init__.py
@@ -16,7 +16,6 @@
 |   |   |-- dashboard
 |   |       |-- __init__.py
 |   |       |-- dashboard_content.py
-|   |       |-- user_profile.py
 |   |-- pages
 |   |   |-- __init__.py
 |   |   |-- home.py
@@ -25,7 +24,6 @@
 |   |   |-- dashboard.py
 |   |-- menu
 |   |   |-- __init__.py
-|   |   |-- menu_items.py
 |   |   |-- sidebar.py
 |   |-- static
 |   |   |-- styles
@@ -33,11 +31,32 @@
 |   |   |-- images
 |   |       |-- logo.png
 |   |-- templates
-|   |   |-- (other_template_1.html)
-|   |   |-- (other_template_2.html)
+|       |-- (other_template_1.html)
+|       |-- (other_template_2.html)
 |   |-- __init__.py
-|   |-- app.py
-|-- requirements.txt
+|   |-- app.py  # Streamlit app file
+|   |
+|-- backend
+|   |-- algo_env
+|   |-- config
+|   |   |-- config.py
+|   |-- database
+|   |   |-- database.py
+|   |   |-- models.py
+|   |   |-- session.py
+|   |-- routes
+|   |   |-- __init__.py
+|   |   |-- login.py
+|   |   |-- register.py
+|   |   |-- reset_password.py
+|   |   |-- schemas.py
+|   |-- services
+|   |   |-- auth_service.py
+|   |-- settings
+|   |   |-- secret_keygen.py
+|   |-- main.py
+|   |-- requirements.txt
+|   |-- .gitignore
+|   |-- test.py
+|-- .gitignore
 |-- README.md
-
-
