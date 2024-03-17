@@ -11,4 +11,3 @@ app.include_router(login_router)
 app.include_router(register_router)
 app.include_router(reset_password_router)
 
- 
