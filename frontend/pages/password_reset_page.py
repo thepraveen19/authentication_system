@@ -4,8 +4,16 @@ import requests
 from components.password_reset.password_reset_form import PasswordResetForm  # Add your password reset form component
 import json
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+os.getenv("config_path")
+
 # Load configuration from config.json
-with open("/home/xbot/Eq_Algo_Project/Authentication_system/frontend/config/config.json", "r") as config_file:
+config_path = os.getenv("config_path")
+
+# Load configuration from config.json
+with open(config_path, "r") as config_file:
     config = json.load(config_file)
 
 # Extract backend URL from the configuration
