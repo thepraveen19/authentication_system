@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import models
 from jose import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from config.config import SECRET_KEY, ALGORITHM
 from configparser import ConfigParser
@@ -23,7 +23,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Function to create a JWT token
 def create_jwt_token(user_id: int, expires_delta: timedelta):
-    to_encode = {"sub": str(user_id), "exp": datetime.utcnow() + expires_delta}
+    to_encode = {"sub": str(user_id), "exp": datetime.now(timezone.utc) + expires_delta}
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_password(plain_password, hashed_password):

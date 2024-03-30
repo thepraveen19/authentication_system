@@ -122,14 +122,18 @@ pip install -r requirements.txt
 ```bash
 python backend/database/model.py
 ```
+9. Go to the user_management_db and run the following command:
+INSERT INTO roles (role_name) VALUES
+    ('regular user'),
+    ('admin');
 
-9. Navigate to the `backend` directory and start the backend server using the following command:
+10. Navigate to the `backend` directory and start the backend server using the following command:
 
 ```bash
 uvicorn app:app --reload
 ```
 
-10. In another terminal, navigate to the `frontend` directory and start the frontend server:
+11. In another terminal, navigate to the `frontend` directory and start the frontend server:
 
 ```bash
 streamlit run app.py
